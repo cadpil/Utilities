@@ -1,6 +1,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local DeepCopy = require(ReplicatedStorage.Source.Utils.DeepCopy)
 local ItemsData = require(script.Parent.ItemsData)
 
 local ItemService = Knit.CreateService {
@@ -14,7 +15,7 @@ end
 
 function ItemService:Get(itemId : number)
     assert(type(itemId) == "number", "Must be an item id (number)")
-    return ItemsData[itemId]
+    return DeepCopy.DeepCopy(ItemsData[itemId])
 end
 
 return ItemService

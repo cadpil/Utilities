@@ -6,13 +6,7 @@ PlayerData.Default = {
     HotbarMaximum = 10;
     BackpackMaximum = 20;
     Inventory = {
-        Hotbar = {
-            [1] = {
-                ItemId = 100_001;
-                Quantity = 1;
-                Keybind = 1;
-            }
-        },
+        Hotbar = {},
         Backpack = {}
     }
 }

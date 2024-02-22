@@ -1,0 +1,19 @@
+Health potion
+    Max stack: 6
+
+Inventory:
+    Health potion  
+        Quantity: 4
+
+Drop health potion:
+    Quantity : 5
+
+4+5 = 9 (BAD)
+
+def sortOut(num)
+    Add(player, 100_002, nil, num)
+
+if 4+5 > 6:
+    remainder = (4+5) - 6
+    3+2 = 5 (GOOD), continue adding
+    sortOut(remainder)
