@@ -19,8 +19,7 @@ function PlayerService:GetPlayerData(player : Player) : table
 end
 
 function PlayerService:KnitStart()
-    task.wait(1)
-    Knit.GetService("InventoryService"):Add(Players.IamACoolGuy_1230, 100_001, 1, nil)
+    
 end
 
 function PlayerService:KnitInit()

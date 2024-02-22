@@ -53,30 +53,29 @@ function InventoryService:Add(player : Player, itemId : number, quantity : numbe
         break
     end
 
+    --If a slot with the item already exists and it can be stacked then add the quantity
     if itemSlot > 0 then
         PlayerData.Inventory[itemLocation][itemSlot].Quantity += quantity
-        print(PlayerService:GetPlayerData(player))
         return
     end
 
-    local freeHotbar = createArray(PlayerData.HotbarMaximum)
-    local freeBackpack = createArray(PlayerData.BackpackMaximum)
+    --Create arrays containing all possible keybinds for hotbar and backpack
+    local freeHotbar : table = createArray(PlayerData.HotbarMaximum)
+    local freeBackpack : table = createArray(PlayerData.BackpackMaximum)
     
+    --Remove the keybinds that are already taken so we can find the ones not in use
     freeHotbar = loopAndRemove(PlayerData.Inventory.Hotbar, freeHotbar)
     freeBackpack = loopAndRemove(PlayerData.Inventory.Backpack, freeBackpack)
 
-    local slot = freeHotbar[1] or freeBackpack[1]
+    --Set slot equal to the first free slot in hotbar, if there isnt one then set to first free slot in backpack, otherwise nil
+    local slot : number = freeHotbar[1] or freeBackpack[1]
     if not slot then
         return "full"
     end
 
-    PlayerData.Inventory[freeHotbar[1] and "Hotbar" or "Backpack"][slot] = {
-        ItemId = itemId;
-        Quantity = quantity;
-        Keybind = slot
-    }
-
-    print(PlayerService:GetPlayerData(player))
+    --Finally set PlayerData.Inventory[(if hotbar free then hotbar else backpack)][the free slot we just found] to item info
+    PlayerData.Inventory[freeHotbar[1] and "Hotbar" or "Backpack"][slot] = Knit.GetService("ItemService"):Get(itemId)
+    PlayerData.Inventory[freeHotbar[1] and "Hotbar" or "Backpack"][slot].Keybind = slot
 end
 
 function InventoryService:KnitStart()
