@@ -1,5 +1,4 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
@@ -10,8 +9,8 @@ local function loadType(parent, nameMatch)
         end
     end
 end
-loadType(ServerStorage, "Service")
+loadType(script.Parent, "Controller")
 
 Knit.Start():andThen(function()
-    loadType(ServerStorage, "_Component")
+    
 end):catch(warn)

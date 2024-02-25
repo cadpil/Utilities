@@ -2,9 +2,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
 
+local ItemService = nil
+local PlayerService = nil
 local InventoryService = Knit.CreateService {
     Name = "InventoryService",
-    Client = {}
+    Client = {
+        ItemAddedSignal = Knit.CreateSignal(),
+        ItemRemovedSignal = Knit.CreateSignal()
+    }
 }
 
 local function createArray(size)
@@ -35,42 +40,69 @@ local function findFree(array) : number
     return smallest
 end
 
-function InventoryService:FindItemInInventory(items : table, itemId : number)
-    local ItemService = Knit.GetService("ItemService")
 
+function InventoryService.Client:GetMaximumItems(player : Player, location : string)
+    local playerData = PlayerService:GetPlayerData(player)
+    return if location == "Hotbar" then playerData.HotbarMaximum else (if location == "Backpack" then playerData.BackpackMaximum else table.pack(playerData.HotbarMaximum, playerData.BackpackMaximum))
+end
+
+function InventoryService:FindItemInInventory(items : table, itemId : number, ignoreMax : boolean)
     for _, data in pairs(items) do
         if data.ItemId ~= itemId then continue end
-        if data.Quantity >= ItemService:Get(itemId).MaxStack then continue end
-        return data.Keybind
+        if data.Quantity >= ItemService:Get(itemId).MaxStack and ignoreMax then continue end
+        return data.Keybind, data.Location
     end
 
-    return -1
+    return -1, nil
 end
 
 function InventoryService:CalculateOverflow(player, itemId, quantity, reference)
-    local ItemService = Knit.GetService("ItemService")
     local maxStack = ItemService:Get(itemId).MaxStack
 
     if reference.Quantity + quantity > maxStack then
         local remainder = (reference.Quantity + quantity) - maxStack
         local toAdd = quantity - remainder
         reference.Quantity += toAdd
-        self:Add(player, itemId, remainder)
+
+        InventoryService.Client.ItemAddedSignal:Fire(player, reference)
+        return self:Add(player, itemId, remainder)
     else
         reference.Quantity += quantity
+        InventoryService.Client.ItemAddedSignal:Fire(player, reference)
+        return true
+    end
+end
+
+function InventoryService:Remove(player : Player, itemId : number, quantity : number, location : string, keybind : number)
+    local InventoryData = PlayerService:GetPlayerData(player).Inventory
+
+    --First checks if item exists at said location and keybind, if not then check the entire inventory, if still no item then return
+    if not InventoryData[location][keybind] then
+        -- for _, items in pairs(InventoryData) do
+        --     keybind, location = self:FindItemInInventory(items, itemId, false)
+        --     if location then break end
+        -- end
+        -- if not location then return end
+        return
+    end
+
+    local itemReference = InventoryData[location][keybind]
+    itemReference.Quantity -= quantity
+    self.Client.ItemRemovedSignal:Fire(player, itemReference)
+
+    if itemReference.Quantity <= 0 then
+        InventoryData[location][keybind] = nil
     end
 end
 
 function InventoryService:Add(player : Player, itemId : number, quantity : number, location : string)
-    --print("Quantity" .. tostring(quantity))
-    local PlayerService = Knit.GetService("PlayerService")
     local PlayerData = PlayerService:GetPlayerData(player)
     
     local itemSlot = -1
     local itemLocation = nil
 
     for _location, items in pairs(PlayerData.Inventory) do
-        itemSlot = self:FindItemInInventory(items, itemId)
+        itemSlot = self:FindItemInInventory(items, itemId, true)
         if itemSlot <= 0 then continue end
         --Check if the current loop of location is equal to the location we want to add an item to, if it is then stop because we dont want to add to other location
         if location == "Hotbar" then 
@@ -82,11 +114,13 @@ function InventoryService:Add(player : Player, itemId : number, quantity : numbe
         break
     end
 
+    print(itemSlot)
+    print(location)
+
     --If a slot with the item already exists and it can be stacked then add the quantity
     if itemSlot > 0 then
         local reference = PlayerData.Inventory[itemLocation][itemSlot]
-        self:CalculateOverflow(player, itemId, quantity, reference)
-        return
+        return self:CalculateOverflow(player, itemId, quantity, reference)
     end
 
     --Create arrays containing all possible keybinds for hotbar and backpack
@@ -111,12 +145,14 @@ function InventoryService:Add(player : Player, itemId : number, quantity : numbe
 
     local reference = PlayerData.Inventory[location][slot]
     reference.Keybind = slot
+    reference.Location = location
 
-    self:CalculateOverflow(player, itemId, quantity, reference)
+    return self:CalculateOverflow(player, itemId, quantity, reference)
 end
 
 function InventoryService:KnitStart()
-
+    ItemService = Knit.GetService("ItemService")
+    PlayerService = Knit.GetService("PlayerService")
 end
 
 
