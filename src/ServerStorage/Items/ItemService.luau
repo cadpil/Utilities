@@ -9,8 +9,12 @@ local ItemService = Knit.CreateService {
     Client = {}
 }
 
+function ItemService.Client:GetSubClass(player : Player, subClass : string)
+    return DeepCopy.DeepCopy(ItemsData[subClass])
+end
+
 function ItemService.Client:Get(player : Player, itemId : number)
-    return self:Get(itemId)
+    return self.Server:Get(itemId)
 end
 
 function ItemService:Get(itemId : number)

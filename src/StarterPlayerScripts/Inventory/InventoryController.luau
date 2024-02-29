@@ -5,7 +5,6 @@ local Knit = require(ReplicatedStorage.Packages.Knit)
 local Player = Knit.Player
 local InventoryUi = Player.PlayerGui:WaitForChild("Inventory")
 
-local InventoryService = nil
 local InventoryController = Knit.CreateController {
     Name = "InventoryController",
     Inventory = {
@@ -14,8 +13,15 @@ local InventoryController = Knit.CreateController {
     }
 }
 
+function InventoryController:KeybindPressed(input)
+    return self.InventoryService:EquipItem(input)
+end
+function InventoryController:UseItem()
+    return self.InventoryService:UseItem()
+end
+
 function InventoryController:CreateInventoryUi(location : string)
-    InventoryService:GetMaximumItems(location):andThen(function(maximum)
+    self.InventoryService:GetMaximumItems(location):andThen(function(maximum)
         local template = InventoryAssets:FindFirstChild(location.."Template")
         for i = 1, maximum do
             local newSlot = template:Clone()
@@ -40,11 +46,11 @@ end
 
 local function AddItem(info)
     local slot = InventoryController.Inventory[info.Location][info.Keybind]
-    info.FrameReference = slot.Reference
+    info.Reference = slot.Reference
 
     updateItem(slot.Reference, info)
 
-    slot = info
+    InventoryController.Inventory[info.Location][info.Keybind] = info
 end
 
 local function RemoveItem(info)
@@ -60,16 +66,16 @@ local function RemoveItem(info)
     slot = newData
 end
 
-function InventoryController.KnitInit()
-    InventoryService = Knit.GetService("InventoryService")
+function InventoryController:KnitInit()
+    self.InventoryService = Knit.GetService("InventoryService")
 
     InventoryController:CreateInventoryUi("Hotbar")
     InventoryController:CreateInventoryUi("Backpack")
 end
 
-function InventoryController.KnitStart()
-    InventoryService.ItemAddedSignal:Connect(AddItem)
-    InventoryService.ItemRemovedSignal:Connect(RemoveItem)
+function InventoryController:KnitStart()
+    self.InventoryService.ItemAddedSignal:Connect(AddItem)
+    self.InventoryService.ItemRemovedSignal:Connect(RemoveItem)
 end
 
 return InventoryController

@@ -1,6 +1,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Knit = require(ReplicatedStorage.Packages.Knit)
+local Utils = ReplicatedStorage.Source.Utils
+local Tools = ServerStorage.Source.Items.Tools
 
 local ItemService = nil
 local PlayerService = nil
@@ -8,7 +11,8 @@ local InventoryService = Knit.CreateService {
     Name = "InventoryService",
     Client = {
         ItemAddedSignal = Knit.CreateSignal(),
-        ItemRemovedSignal = Knit.CreateSignal()
+        ItemRemovedSignal = Knit.CreateSignal(),
+        ItemUnequippedSignal = Knit.CreateSignal()
     }
 }
 
@@ -40,6 +44,22 @@ local function findFree(array) : number
     return smallest
 end
 
+local function UnequipItem(player : Player, managed : boolean)
+    local playerInventory = PlayerService:GetPlayerData(player).Inventory
+    if not playerInventory.equipped then return end
+
+    local oldKeybind = playerInventory.equipped.Keybind
+
+    if not managed then
+        playerInventory.equipped:destroy()
+        playerInventory.equipped = nil
+    else
+        InventoryService.Client.ItemUnequippedSignal:Fire(player)
+    end
+
+    return oldKeybind
+end
+
 
 function InventoryService.Client:GetMaximumItems(player : Player, location : string)
     local playerData = PlayerService:GetPlayerData(player)
@@ -48,6 +68,7 @@ end
 
 function InventoryService:FindItemInInventory(items : table, itemId : number, ignoreMax : boolean)
     for _, data in pairs(items) do
+        if not data.ItemId then continue end
         if data.ItemId ~= itemId then continue end
         if data.Quantity >= ItemService:Get(itemId).MaxStack and ignoreMax then continue end
         return data.Keybind, data.Location
@@ -78,21 +99,25 @@ function InventoryService:Remove(player : Player, itemId : number, quantity : nu
 
     --First checks if item exists at said location and keybind, if not then check the entire inventory, if still no item then return
     if not InventoryData[location][keybind] then
-        -- for _, items in pairs(InventoryData) do
-        --     keybind, location = self:FindItemInInventory(items, itemId, false)
-        --     if location then break end
-        -- end
-        -- if not location then return end
         return
     end
 
     local itemReference = InventoryData[location][keybind]
     itemReference.Quantity -= quantity
+
+    -- if itemReference.Keybind == InventoryData.equipped.Keybind and itemReference.Location == InventoryData.equipped.Location then
+    --     UnequipItem(player)
+    -- end
+
     self.Client.ItemRemovedSignal:Fire(player, itemReference)
 
     if itemReference.Quantity <= 0 then
+        if InventoryData.equipped.Keybind == keybind and InventoryData.equipped.Location == location then
+            UnequipItem(player, true)
+        end
         InventoryData[location][keybind] = nil
     end
+    return true
 end
 
 function InventoryService:Add(player : Player, itemId : number, quantity : number, location : string)
@@ -102,6 +127,7 @@ function InventoryService:Add(player : Player, itemId : number, quantity : numbe
     local itemLocation = nil
 
     for _location, items in pairs(PlayerData.Inventory) do
+        if not (_location == "Hotbar" or _location == "Backpack") then continue end
         itemSlot = self:FindItemInInventory(items, itemId, true)
         if itemSlot <= 0 then continue end
         --Check if the current loop of location is equal to the location we want to add an item to, if it is then stop because we dont want to add to other location
@@ -114,22 +140,15 @@ function InventoryService:Add(player : Player, itemId : number, quantity : numbe
         break
     end
 
-    print(itemSlot)
-    print(location)
-
     --If a slot with the item already exists and it can be stacked then add the quantity
     if itemSlot > 0 then
         local reference = PlayerData.Inventory[itemLocation][itemSlot]
         return self:CalculateOverflow(player, itemId, quantity, reference)
     end
-
-    --Create arrays containing all possible keybinds for hotbar and backpack
-    local freeHotbar : table = createArray(PlayerData.HotbarMaximum)
-    local freeBackpack : table = createArray(PlayerData.BackpackMaximum)
     
     --Remove the keybinds that are already taken so we can find the ones not in use
-    freeHotbar = loopAndRemove(PlayerData.Inventory.Hotbar, freeHotbar)
-    freeBackpack = loopAndRemove(PlayerData.Inventory.Backpack, freeBackpack)
+    local freeHotbar = loopAndRemove(PlayerData.Inventory.Hotbar, createArray(PlayerData.HotbarMaximum))
+    local freeBackpack = loopAndRemove(PlayerData.Inventory.Backpack, createArray(PlayerData.BackpackMaximum))
 
     --Set slot equal to the first free slot in hotbar, if there isnt one then set to first free slot in backpack, otherwise nil
     freeHotbar = findFree(freeHotbar)
@@ -148,6 +167,46 @@ function InventoryService:Add(player : Player, itemId : number, quantity : numbe
     reference.Location = location
 
     return self:CalculateOverflow(player, itemId, quantity, reference)
+end
+
+local function WeldToHand(character : Model, item : Model)
+    item = item:Clone()
+    item.Parent = character
+    local grip = item.PrimaryPart.Grip
+
+    local rigidConstraint = character.RightHand:FindFirstChild("RigidConstraint") or Instance.new("RigidConstraint")
+    rigidConstraint.Attachment0 = character.RightHand.RightGripAttachment
+    rigidConstraint.Attachment1 = grip
+    rigidConstraint.Parent = character.RightHand
+    return item
+end
+
+function InventoryService.Client:EquipItem(player : Player, keybind : string | number)
+    if not (keybind >= 1 and keybind <= 9) then return false end
+
+    local playerInventory = PlayerService:GetPlayerData(player).Inventory
+    local item = require(Utils.DeepCopy).DeepCopy(playerInventory.Hotbar[keybind])
+    if not item then return 1 end
+
+    local oldKeybind = UnequipItem(player)
+    if oldKeybind == keybind then return "unequip" end
+
+    local clonedItem = WeldToHand(player.Character, item.ModelReference)
+    playerInventory.equipped = require(Tools:FindFirstChild(item.Class)).new(player, clonedItem, item)
+    return true
+end
+
+function InventoryService.Client:UseItem(player : Player)
+    local playerInventory = PlayerService:GetPlayerData(player).Inventory
+    local equipped = playerInventory.equipped
+    if not equipped then return false end
+
+    local success, removeAmount = equipped:Use()
+    if success then
+        success = self.Server:Remove(player, nil, removeAmount, equipped.Location, equipped.Keybind)
+        playerInventory.equipped = nil
+    end
+    return success
 end
 
 function InventoryService:KnitStart()

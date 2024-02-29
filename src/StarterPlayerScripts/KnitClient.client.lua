@@ -11,6 +11,4 @@ local function loadType(parent, nameMatch)
 end
 loadType(script.Parent, "Controller")
 
-Knit.Start():andThen(function()
-    
-end):catch(warn)
+Knit.Start():catch(warn)
